@@ -1,0 +1,65 @@
+﻿trigger:
+  branches:
+    include:
+      - main
+      - deploy/production
+
+pool:
+  name: Agent
+
+variables:
+  - group: epicbook-secrets
+
+stages:
+  - stage: Bootstrap
+    displayName: Ensure agent tools
+    jobs:
+      - job: AgentTools
+        steps:
+          - script: |
+              set -e
+              if ! command -v terraform >/dev/null; then
+                echo "Installing Terraform..."
+                wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                sudo apt update && sudo apt install -y terraform
+              fi
+              terraform -version
+            displayName: Install Terraform if missing
+
+  - stage: Infra
+    displayName: Terraform apply
+    dependsOn: Bootstrap
+    condition: succeeded()
+    jobs:
+      - job: Terraform
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: Terraform init + apply
+            inputs:
+              azureSubscription: it-azure-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                cd terraform
+
+                cat > terraform.tfvars <<EOF
+                project             = "epicbook"
+                location            = "canadacentral"
+                resource_group_name = "kalu_RG"
+                vm_size_deploy      = "Standard_DS2_v2"
+                agent_public_ip     = "$(AGENT_PUBLIC_IP)"
+                EOF
+
+                terraform init \
+                  -backend-config="access_key=$(TF_STATE_KEY)"
+
+                terraform plan -out=tfplan
+                terraform apply -auto-approve tfplan
+
+                echo "=== Outputs ==="
+                terraform output -raw vm_deploy_public_ip
+                echo ""
+                terraform output -raw acr_login_server
