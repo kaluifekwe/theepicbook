@@ -15,7 +15,7 @@ variable "resource_group_name" {
 
 variable "vm_size_deploy" {
   type    = string
-  default = "Standard_DS2_v2"
+  default = "Standard_B2s"
 }
 
 variable "admin_username" {

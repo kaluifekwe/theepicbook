@@ -1,4 +1,4 @@
-trigger:
+﻿trigger:
   branches:
     include:
       - main
@@ -53,7 +53,7 @@ stages:
                 project             = "epicbook"
                 location            = "canadacentral"
                 resource_group_name = "kalu_RG"
-                vm_size_deploy      = "Standard_DS2_v2"
+                vm_size_deploy      = "Standard_B2s"
                 agent_public_ip     = "$(AGENT_PUBLIC_IP)"
                 EOF
 
