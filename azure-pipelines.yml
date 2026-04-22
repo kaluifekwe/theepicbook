@@ -19,13 +19,16 @@ stages:
           - script: |
               set -e
               if ! command -v terraform >/dev/null; then
-                echo "Installing Terraform..."
                 wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
                 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
                 sudo apt update && sudo apt install -y terraform
               fi
+              if ! command -v az >/dev/null; then
+                curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+              fi
               terraform -version
-            displayName: Install Terraform if missing
+              az --version | head -1
+            displayName: Install Terraform and Azure CLI if missing
 
   - stage: Infra
     displayName: Terraform apply
@@ -41,6 +44,7 @@ stages:
               azureSubscription: it-azure-connection
               scriptType: bash
               scriptLocation: inlineScript
+              addSpnToEnvironment: true
               inlineScript: |
                 set -e
                 cd terraform
@@ -53,9 +57,13 @@ stages:
                 agent_public_ip     = "$(AGENT_PUBLIC_IP)"
                 EOF
 
-                terraform init \
-                  -backend-config="access_key=$(TF_STATE_KEY)"
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_TENANT_ID=$tenantId
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_USE_AZUREAD=true
 
+                terraform init
                 terraform plan -out=tfplan
                 terraform apply -auto-approve tfplan
 
